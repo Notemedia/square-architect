@@ -1,0 +1,1431 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="SquareArch">
+    <title>Square Architect: Master Builder</title>
+    
+    <!-- Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
+    
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['"Inter"', 'sans-serif'],
+                        mono: ['"JetBrains Mono"', 'monospace'],
+                    },
+                    colors: {
+                        bg: "#000000", /* Deep Black for iOS OLED feel */
+                        panel: "#1C1C1E", /* iOS Dark Mode Gray */
+                        accent: "#0A84FF", /* iOS Blue */
+                        success: "#30D158", /* iOS Green */
+                        gold: "#FFD60A", /* iOS Yellow */
+                        danger: "#FF453A", /* iOS Red */
+                        knob: "#2C2C2E"
+                    },
+                    animation: {
+                        'float-up': 'floatUp 1s ease-out forwards',
+                        'bounce-sm': 'bounceSm 0.5s infinite',
+                        'pulse-glow': 'pulseGlow 2s infinite',
+                        'dash': 'dash 30s linear infinite',
+                        'pop': 'pop 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275)',
+                        'fade-in': 'fadeIn 1s ease-out forwards',
+                    },
+                    keyframes: {
+                        floatUp: {
+                            '0%': { transform: 'translateY(0) scale(0.8)', opacity: '0' },
+                            '20%': { transform: 'translateY(-20px) scale(1.2)', opacity: '1' },
+                            '100%': { transform: 'translateY(-60px) scale(1)', opacity: '0' },
+                        },
+                        bounceSm: {
+                            '0%, 100%': { transform: 'translateY(0)' },
+                            '50%': { transform: 'translateY(-5px)' },
+                        },
+                        pulseGlow: {
+                            '0%, 100%': { boxShadow: '0 0 5px rgba(10, 132, 255, 0.5)' },
+                            '50%': { boxShadow: '0 0 20px rgba(10, 132, 255, 0.8)' },
+                        },
+                        dash: {
+                            to: { strokeDashoffset: -100 }
+                        },
+                        pop: {
+                            '0%': { transform: 'scale(0.9)' },
+                            '50%': { transform: 'scale(1.1)' },
+                            '100%': { transform: 'scale(1)' }
+                        },
+                        fadeIn: {
+                            '0%': { opacity: '0' },
+                            '100%': { opacity: '1' }
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+
+    <!-- React & ReactDOM -->
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+
+    <style>
+        body { 
+            background-color: #000000; 
+            color: #F2F2F7;
+            overflow: hidden;
+            touch-action: none;
+            -webkit-user-select: none;
+            user-select: none;
+            -webkit-font-smoothing: antialiased;
+            -moz-osx-font-smoothing: grayscale;
+            overscroll-behavior: none;
+        }
+        
+        .floating-text {
+            position: absolute;
+            pointer-events: none;
+            z-index: 100;
+            text-shadow: 0 2px 8px rgba(0,0,0,0.5);
+            will-change: transform, opacity;
+        }
+
+        .scanlines {
+            background: radial-gradient(circle at center, transparent 0%, #000 120%), linear-gradient(to bottom, rgba(255,255,255,0.03) 1px, transparent 1px);
+            background-size: 100% 100%, 100% 3px;
+            pointer-events: none;
+        }
+
+        .room-transition {
+            transition: all 0.4s cubic-bezier(0.25, 0.8, 0.25, 1);
+            transform: translateZ(0);
+            backface-visibility: hidden;
+            will-change: left, top, width, height;
+            contain: layout paint style;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.3);
+        }
+        
+        main {
+            transform: translateZ(0);
+        }
+        
+        .glass-panel {
+            background: rgba(28, 28, 30, 0.65);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .modal-backdrop {
+            background: rgba(0, 0, 0, 0.6);
+            backdrop-filter: blur(10px);
+            -webkit-backdrop-filter: blur(10px);
+            will-change: opacity;
+        }
+
+        .connection-line {
+            stroke-dasharray: 6;
+            animation: dash 30s linear infinite;
+            will-change: stroke-dashoffset;
+        }
+
+        canvas.confetti {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            z-index: 50;
+        }
+
+        /* Knob Styles iOS Style */
+        .knob-container {
+            touch-action: none;
+            border-radius: 50%;
+            background: linear-gradient(145deg, #2c2c2e, #1c1c1e);
+            box-shadow:  5px 5px 10px #151516, -5px -5px 10px #2f2f32;
+        }
+        .knob-indicator {
+            box-shadow: 0 0 8px #0A84FF;
+        }
+
+        /* iOS Safe Area Support */
+        .safe-area-pb {
+            padding-bottom: env(safe-area-inset-bottom, 20px) !important;
+        }
+        .safe-area-pt {
+            padding-top: max(1rem, env(safe-area-inset-top)) !important;
+        }
+    </style>
+</head>
+<body>
+    <div id="root"></div>
+
+    <script type="text/babel">
+        const { useState, useEffect, useRef, useMemo, useCallback } = React;
+
+        // --- Audio System (Web Audio API) ---
+        const useAudio = () => {
+            const audioCtxRef = useRef(null);
+            const [isMuted, setIsMuted] = useState(false);
+
+            const initAudio = () => {
+                if (!audioCtxRef.current) {
+                    const AudioContext = window.AudioContext || window.webkitAudioContext;
+                    audioCtxRef.current = new AudioContext();
+                }
+                if (audioCtxRef.current.state === 'suspended') {
+                    audioCtxRef.current.resume();
+                }
+            };
+
+            const playTone = (freq, type, duration, vol = 0.1) => {
+                if (isMuted || !audioCtxRef.current) return;
+                const ctx = audioCtxRef.current;
+                const osc = ctx.createOscillator();
+                const gain = ctx.createGain();
+                
+                osc.type = type;
+                osc.frequency.setValueAtTime(freq, ctx.currentTime);
+                
+                gain.gain.setValueAtTime(vol, ctx.currentTime);
+                gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + duration);
+
+                osc.connect(gain);
+                gain.connect(ctx.destination);
+                
+                osc.start();
+                osc.stop(ctx.currentTime + duration);
+            };
+
+            const playSelect = () => playTone(880, 'sine', 0.1, 0.05);
+            const playSwap = () => {
+                playTone(440, 'triangle', 0.1, 0.1);
+                setTimeout(() => playTone(660, 'triangle', 0.1, 0.1), 50);
+            };
+            const playBonus = () => {
+                playTone(523.25, 'sine', 0.1, 0.1); // C5
+                setTimeout(() => playTone(659.25, 'sine', 0.1, 0.1), 100); // E5
+                setTimeout(() => playTone(783.99, 'sine', 0.2, 0.1), 200); // G5
+            };
+            const playWin = () => {
+                [523.25, 659.25, 783.99, 1046.50, 1318.51, 1567.98].forEach((freq, i) => {
+                    setTimeout(() => playTone(freq, 'square', 0.3, 0.05), i * 80);
+                });
+            };
+            const playEnding = () => {
+                // Fanfare
+                const notes = [523.25, 659.25, 783.99, 1046.50, 783.99, 1046.50];
+                notes.forEach((freq, i) => {
+                    setTimeout(() => playTone(freq, 'square', 0.4, 0.1), i * 150);
+                });
+            };
+            const playError = () => {
+                 playTone(150, 'sawtooth', 0.2, 0.1);
+                 setTimeout(() => playTone(100, 'sawtooth', 0.2, 0.1), 100);
+            };
+            
+            // Haptic Tick Sound
+            const playTick = () => {
+                if (isMuted || !audioCtxRef.current) return;
+                const ctx = audioCtxRef.current;
+                const osc = ctx.createOscillator();
+                const gain = ctx.createGain();
+                
+                // Crisp mechanical click
+                osc.frequency.setValueAtTime(800, ctx.currentTime);
+                osc.frequency.exponentialRampToValueAtTime(100, ctx.currentTime + 0.02);
+                
+                gain.gain.setValueAtTime(0.08, ctx.currentTime);
+                gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.02);
+
+                osc.connect(gain);
+                gain.connect(ctx.destination);
+                
+                osc.start();
+                osc.stop(ctx.currentTime + 0.02);
+            }
+
+            return { initAudio, isMuted, setIsMuted, playSelect, playSwap, playBonus, playWin, playError, playTick, playEnding };
+        };
+
+        // --- Knob Component ---
+        const Knob = ({ label, value, min, max, onChange, onTick, large = false }) => {
+            const [isDragging, setIsDragging] = useState(false);
+            const [startY, setStartY] = useState(0);
+            const [startX, setStartX] = useState(0); 
+            const [startVal, setStartVal] = useState(0);
+
+            const percent = (value - min) / (max - min);
+            const angle = -135 + (percent * 270);
+
+            const handleStart = (clientX, clientY) => {
+                setIsDragging(true);
+                setStartX(clientX);
+                setStartY(clientY);
+                setStartVal(value);
+                onTick && onTick(true); 
+            };
+
+            const handleMove = useCallback((clientX, clientY) => {
+                if (!isDragging) return;
+                const deltaX = clientX - startX;
+                const deltaY = startY - clientY; 
+                const delta = deltaX + deltaY;
+                const range = max - min;
+                const deltaVal = Math.round((delta / 250) * range); 
+                
+                let newVal = startVal + deltaVal;
+                newVal = Math.max(min, Math.min(max, newVal));
+
+                if (newVal !== value) {
+                    onChange(newVal);
+                    if (onTick) onTick();
+                }
+            }, [isDragging, startX, startY, startVal, value, min, max, onChange, onTick]);
+
+            const handleEnd = () => setIsDragging(false);
+
+            useEffect(() => {
+                const onMouseMove = (e) => handleMove(e.clientX, e.clientY);
+                const onMouseUp = () => handleEnd();
+                const onTouchMove = (e) => handleMove(e.touches[0].clientX, e.touches[0].clientY);
+                const onTouchEnd = () => handleEnd();
+
+                if (isDragging) {
+                    window.addEventListener('mousemove', onMouseMove);
+                    window.addEventListener('mouseup', onMouseUp);
+                    window.addEventListener('touchmove', onTouchMove);
+                    window.addEventListener('touchend', onTouchEnd);
+                }
+                return () => {
+                    window.removeEventListener('mousemove', onMouseMove);
+                    window.removeEventListener('mouseup', onMouseUp);
+                    window.removeEventListener('touchmove', onTouchMove);
+                    window.removeEventListener('touchend', onTouchEnd);
+                }
+            }, [isDragging, handleMove]);
+
+            const sizeClass = large ? "w-20 h-20" : "w-14 h-14";
+            const indicatorClass = large ? "w-1.5 h-3.5 mt-1.5" : "w-1 h-2.5 mt-1";
+
+            return (
+                <div className="flex flex-col items-center gap-2 select-none group">
+                    <div className="text-[10px] font-bold text-gray-400 tracking-widest">{label}</div>
+                    <div 
+                        className={`knob-container relative ${sizeClass} cursor-ne-resize transition-all ${isDragging ? 'scale-95 brightness-110' : ''}`}
+                        onMouseDown={(e) => handleStart(e.clientX, e.clientY)}
+                        onTouchStart={(e) => handleStart(e.touches[0].clientX, e.touches[0].clientY)}
+                    >
+                        <div className="absolute inset-0 rounded-full border border-white/5"></div>
+                        {[...Array(9)].map((_, i) => (
+                            <div key={i} className="absolute w-0.5 h-1.5 bg-gray-600 top-1 left-1/2 -translate-x-1/2 origin-bottom"
+                                style={{ transform: `translateX(-50%) rotate(${-135 + (i * 33.75)}deg) translateY(${large ? 4 : 2}px)` }}
+                            />
+                        ))}
+                        <div 
+                            className="absolute inset-2 rounded-full bg-gradient-to-br from-panel to-[#2C2C2E] flex items-start justify-center shadow-inner"
+                            style={{ transform: `rotate(${angle}deg)` }}
+                        >
+                            <div className={`${indicatorClass} bg-accent rounded-full knob-indicator`}></div>
+                        </div>
+                    </div>
+                    <div className="bg-white/10 px-2 py-0.5 rounded text-[10px] font-mono font-bold text-accent min-w-[3rem] text-center backdrop-blur-sm">
+                        {value}
+                    </div>
+                </div>
+            );
+        };
+
+        // --- Confetti System ---
+        const Confetti = ({ active }) => {
+            const canvasRef = useRef(null);
+
+            useEffect(() => {
+                if (!active) return;
+                const canvas = canvasRef.current;
+                const ctx = canvas.getContext('2d');
+                let animationId;
+                const particles = [];
+
+                const colors = ['#0A84FF', '#30D158', '#FFD60A', '#FF453A', '#FFFFFF'];
+
+                for(let i=0; i<150; i++) {
+                    particles.push({
+                        x: window.innerWidth / 2,
+                        y: window.innerHeight / 2,
+                        vx: (Math.random() - 0.5) * 20,
+                        vy: (Math.random() - 0.5) * 20,
+                        size: Math.random() * 6 + 3,
+                        color: colors[Math.floor(Math.random() * colors.length)],
+                        life: 100 + Math.random() * 50
+                    });
+                }
+
+                const render = () => {
+                    ctx.clearRect(0, 0, canvas.width, canvas.height);
+                    particles.forEach((p, i) => {
+                        p.x += p.vx;
+                        p.y += p.vy;
+                        p.vy += 0.3; // Gravity
+                        p.life--;
+                        p.size *= 0.96;
+
+                        ctx.fillStyle = p.color;
+                        ctx.beginPath();
+                        ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
+                        ctx.fill();
+
+                        if (p.life <= 0) particles.splice(i, 1);
+                    });
+
+                    if (particles.length > 0) {
+                        animationId = requestAnimationFrame(render);
+                    }
+                };
+                
+                canvas.width = window.innerWidth;
+                canvas.height = window.innerHeight;
+                render();
+
+                return () => cancelAnimationFrame(animationId);
+            }, [active]);
+
+            if (!active) return null;
+            return <canvas ref={canvasRef} className="confetti" />;
+        };
+
+        // --- Game Data ---
+        // (Keeping the data logic same as before but ensuring styles match iOS theme)
+        const ROOM_TYPES = {
+            LIVING: { icon: '🛋️', color: 'bg-orange-500' },
+            DINING: { icon: '🍽️', color: 'bg-orange-400' },
+            KITCHEN: { icon: '🍳', color: 'bg-red-500' },
+            BATH: { icon: '🛁', color: 'bg-cyan-500' },
+            MASTER: { icon: '🛏️', color: 'bg-indigo-500' },
+            GUEST: { icon: '🛌', color: 'bg-indigo-400' },
+            ENTRY: { icon: '🚪', color: 'bg-slate-500' },
+            STUDY: { icon: '📚', color: 'bg-emerald-500' },
+            GARAGE: { icon: '🚗', color: 'bg-slate-600' },
+            GARDEN: { icon: '🌳', color: 'bg-green-500' },
+            OFFICE: { icon: '💼', color: 'bg-blue-600' },
+            MEETING: { icon: '🤝', color: 'bg-teal-600' },
+            GALLERY: { icon: '🎨', color: 'bg-purple-500' },
+            CAFE: { icon: '☕', color: 'bg-amber-600' },
+            SHOP: { icon: '🛍️', color: 'bg-pink-500' },
+            STORAGE: { icon: '📦', color: 'bg-gray-600' },
+            LAB: { icon: '⚗️', color: 'bg-indigo-600' },
+            REACTOR: { icon: '☢️', color: 'bg-yellow-600' },
+            DOCK: { icon: '⚓', color: 'bg-slate-500' },
+            GYM: { icon: '💪', color: 'bg-rose-500' },
+            COMMAND: { icon: '📡', color: 'bg-red-600' },
+            // New Types for Levels 8-10
+            CORE: { icon: '🛗', color: 'bg-zinc-600' },
+            POOL: { icon: '🏊', color: 'bg-cyan-400' },
+            SUITE: { icon: '👑', color: 'bg-yellow-500' },
+            AIRLOCK: { icon: '🚪', color: 'bg-slate-400' },
+            SOLAR: { icon: '☀️', color: 'bg-orange-400' },
+            BIOSPH: { icon: '🌿', color: 'bg-emerald-400' }
+        };
+
+        const LEVELS = [
+            {
+                id: 1,
+                name: "Tiny Studio",
+                desc: "Learn basics. Keep it compact.",
+                target: 650,
+                moves: 5,
+                width: 15,
+                height: 15,
+                rooms: [
+                    { id: 'living', type: 'LIVING', area: 10 },
+                    { id: 'kitchen', type: 'KITCHEN', area: 5 },
+                    { id: 'bath', type: 'BATH', area: 4 },
+                    { id: 'entry', type: 'ENTRY', area: 3 },
+                ],
+                connections: [
+                    { s: 'living', t: 'kitchen', label: 'Cook' },
+                    { s: 'living', t: 'entry', label: 'Welcome' }
+                ],
+                bonus: {
+                    id: 'small_entry',
+                    text: "Entry < 4m wide",
+                    check: (rects, w, h) => {
+                        const r = rects.find(i => i.id === 'entry');
+                        return r && r.w < 4;
+                    }
+                }
+            },
+            {
+                id: 2,
+                name: "The Apartment",
+                desc: "Separate public & private.",
+                target: 800,
+                moves: 8,
+                width: 20,
+                height: 15,
+                rooms: [
+                    { id: 'living', type: 'LIVING', area: 12 },
+                    { id: 'dining', type: 'DINING', area: 8 },
+                    { id: 'kitchen', type: 'KITCHEN', area: 6 },
+                    { id: 'master', type: 'MASTER', area: 10 },
+                    { id: 'bath', type: 'BATH', area: 4 },
+                ],
+                connections: [
+                    { s: 'living', t: 'dining', label: 'Flow' },
+                    { s: 'dining', t: 'kitchen', label: 'Serve' },
+                    { s: 'master', t: 'bath', label: 'Ensuite' }
+                ],
+                bonus: {
+                    id: 'big_living',
+                    text: "Living Area > 30%",
+                    check: (rects, siteW, siteH) => {
+                        const r = rects.find(i => i.id === 'living');
+                        if(!r) return false;
+                        const total = siteW * siteH;
+                        return (r.w * r.h) / total > 0.3;
+                    }
+                }
+            },
+            {
+                id: 3,
+                name: "Family Home",
+                desc: "Complex layout.",
+                target: 900,
+                moves: 15,
+                width: 25,
+                height: 20,
+                rooms: [
+                    { id: 'living', type: 'LIVING', area: 15 },
+                    { id: 'dining', type: 'DINING', area: 10 },
+                    { id: 'kitchen', type: 'KITCHEN', area: 8 },
+                    { id: 'master', type: 'MASTER', area: 12 },
+                    { id: 'guest', type: 'GUEST', area: 8 },
+                    { id: 'bath1', type: 'BATH', area: 4 },
+                    { id: 'bath2', type: 'BATH', area: 4 },
+                    { id: 'entry', type: 'ENTRY', area: 4 },
+                ],
+                connections: [
+                    { s: 'living', t: 'dining', label: 'Flow' },
+                    { s: 'kitchen', t: 'dining', label: 'Serve' },
+                    { s: 'master', t: 'bath1', label: 'Private' },
+                    { s: 'guest', t: 'bath2', label: 'Access' },
+                    { s: 'living', t: 'entry', label: 'Welcome' }
+                ],
+                bonus: {
+                    id: 'master_corner',
+                    text: "Master in Corner",
+                    check: (rects, siteW, siteH) => {
+                        const r = rects.find(i => i.id === 'master');
+                        if (!r) return false;
+                        // Check if touching 2 edges
+                        const touchL = r.x < 0.1;
+                        const touchR = r.x + r.w > siteW - 0.1;
+                        const touchT = r.y < 0.1;
+                        const touchB = r.y + r.h > siteH - 0.1;
+                        return (touchL || touchR) && (touchT || touchB);
+                    }
+                }
+            },
+             {
+                id: 4,
+                name: "Luxury Estate",
+                desc: "Ultimate mansion.",
+                target: 1100,
+                moves: 20,
+                width: 30,
+                height: 30,
+                rooms: [
+                    { id: 'living', type: 'LIVING', area: 20 },
+                    { id: 'dining', type: 'DINING', area: 12 },
+                    { id: 'kitchen', type: 'KITCHEN', area: 10 },
+                    { id: 'master', type: 'MASTER', area: 15 },
+                    { id: 'study', type: 'STUDY', area: 8 },
+                    { id: 'garden', type: 'GARDEN', area: 25 },
+                    { id: 'garage', type: 'GARAGE', area: 15 },
+                    { id: 'bath', type: 'BATH', area: 6 },
+                    { id: 'entry', type: 'ENTRY', area: 5 },
+                ],
+                connections: [
+                    { s: 'living', t: 'garden', label: 'View' },
+                    { s: 'garage', t: 'kitchen', label: 'Groceries' },
+                    { s: 'study', t: 'master', label: 'Quiet' },
+                    { s: 'dining', t: 'kitchen', label: 'Serve' }
+                ],
+                 bonus: {
+                    id: 'square_garden',
+                    text: "Perfect Square Garden",
+                    check: (rects) => {
+                        const r = rects.find(i => i.id === 'garden');
+                        if(!r) return false;
+                        const ratio = r.w > r.h ? r.h/r.w : r.w/r.h;
+                        return ratio > 0.98;
+                    }
+                }
+            },
+            {
+                id: 5,
+                name: "Tech Office",
+                desc: "Design a modern workspace.",
+                target: 1200,
+                moves: 25,
+                width: 32,
+                height: 25,
+                rooms: [
+                    { id: 'workspace', type: 'OFFICE', area: 25 },
+                    { id: 'meet1', type: 'MEETING', area: 8 },
+                    { id: 'meet2', type: 'MEETING', area: 8 },
+                    { id: 'reception', type: 'ENTRY', area: 6 },
+                    { id: 'lounge', type: 'CAFE', area: 12 },
+                    { id: 'server', type: 'STORAGE', area: 5 },
+                    { id: 'bath', type: 'BATH', area: 6 },
+                ],
+                connections: [
+                    { s: 'reception', t: 'lounge', label: 'Welcome' },
+                    { s: 'lounge', t: 'workspace', label: 'Break' },
+                    { s: 'workspace', t: 'meet1', label: 'Collab' },
+                    { s: 'workspace', t: 'meet2', label: 'Collab' },
+                    { s: 'workspace', t: 'server', label: 'Admin' }
+                ],
+                bonus: {
+                    id: 'central_workspace',
+                    text: "Workspace > 35% Area",
+                    check: (rects, siteW, siteH) => {
+                         const r = rects.find(i => i.id === 'workspace');
+                         if(!r) return false;
+                         return (r.w * r.h) / (siteW * siteH) > 0.35;
+                    }
+                }
+            },
+            {
+                id: 6,
+                name: "Art Museum",
+                desc: "Flow is everything.",
+                target: 1150, 
+                moves: 40, 
+                width: 35,
+                height: 30,
+                rooms: [
+                    { id: 'hall', type: 'ENTRY', area: 10 },
+                    { id: 'gal1', type: 'GALLERY', area: 15 },
+                    { id: 'gal2', type: 'GALLERY', area: 15 },
+                    { id: 'gal3', type: 'GALLERY', area: 20 },
+                    { id: 'shop', type: 'SHOP', area: 8 },
+                    { id: 'cafe', type: 'CAFE', area: 10 },
+                    { id: 'storage', type: 'STORAGE', area: 8 },
+                    { id: 'office', type: 'OFFICE', area: 6 },
+                ],
+                connections: [
+                    { s: 'hall', t: 'gal1', label: 'Start' },
+                    { s: 'gal1', t: 'gal2', label: 'Flow' },
+                    { s: 'gal2', t: 'gal3', label: 'Flow' },
+                    { s: 'gal3', t: 'shop', label: 'Exit' },
+                    { s: 'hall', t: 'shop', label: 'Access' },
+                    { s: 'shop', t: 'cafe', label: 'Relax' }
+                ],
+                bonus: {
+                    id: 'long_gallery',
+                    text: "Long Main Gallery (2:1)",
+                    check: (rects) => {
+                         const r = rects.find(i => i.id === 'gal3');
+                         if(!r) return false;
+                         const ratio = r.w > r.h ? r.w/r.h : r.h/r.w;
+                         return ratio > 1.8; 
+                    }
+                }
+            },
+            {
+                id: 7,
+                name: "Orbital Station",
+                desc: "Zero-G efficiency. Connect systems.",
+                target: 1200,
+                moves: 40,
+                width: 40,
+                height: 40,
+                rooms: [
+                    { id: 'command', type: 'COMMAND', area: 20 },
+                    { id: 'lab1', type: 'LAB', area: 15 },
+                    { id: 'lab2', type: 'LAB', area: 15 },
+                    { id: 'reactor', type: 'REACTOR', area: 10 },
+                    { id: 'quarters', type: 'GUEST', area: 20 },
+                    { id: 'hydro', type: 'GARDEN', area: 15 },
+                    { id: 'dock_a', type: 'DOCK', area: 8 },
+                    { id: 'dock_b', type: 'DOCK', area: 8 },
+                    { id: 'gym', type: 'GYM', area: 10 },
+                ],
+                connections: [
+                    { s: 'command', t: 'lab1', label: 'Data' },
+                    { s: 'command', t: 'lab2', label: 'Data' },
+                    { s: 'reactor', t: 'lab1', label: 'Power' },
+                    { s: 'reactor', t: 'lab2', label: 'Power' },
+                    { s: 'quarters', t: 'gym', label: 'Health' },
+                    { s: 'dock_b', t: 'hydro', label: 'Supplies' },
+                    { s: 'dock_a', t: 'quarters', label: 'Crew' }
+                ],
+                bonus: {
+                    id: 'central_command',
+                    text: "Central Command",
+                    check: (rects, siteW, siteH) => {
+                         const r = rects.find(i => i.id === 'command');
+                         if(!r) return false;
+                         const cx = r.x + r.w / 2;
+                         const cy = r.y + r.h / 2;
+                         const siteCx = siteW / 2;
+                         const siteCy = siteH / 2;
+                         return Math.abs(cx - siteCx) < siteW * 0.2 && 
+                                Math.abs(cy - siteCy) < siteH * 0.2;
+                    }
+                }
+            },
+            // Level 8: Skyscraper Floor
+            {
+                id: 8,
+                name: "Sky Tower",
+                desc: "High-rise efficiency. Center the core.",
+                target: 1300,
+                moves: 35,
+                width: 30,
+                height: 30,
+                rooms: [
+                    { id: 'core', type: 'CORE', area: 15 },
+                    { id: 'off1', type: 'OFFICE', area: 12 },
+                    { id: 'off2', type: 'OFFICE', area: 12 },
+                    { id: 'off3', type: 'OFFICE', area: 12 },
+                    { id: 'meet', type: 'MEETING', area: 10 },
+                    { id: 'bath', type: 'BATH', area: 8 },
+                    { id: 'lounge', type: 'CAFE', area: 10 },
+                ],
+                connections: [
+                    { s: 'core', t: 'off1', label: 'Access' },
+                    { s: 'core', t: 'off2', label: 'Access' },
+                    { s: 'core', t: 'off3', label: 'Access' },
+                    { s: 'core', t: 'bath', label: 'Access' },
+                    { s: 'lounge', t: 'meet', label: 'Break' }
+                ],
+                bonus: {
+                    id: 'central_core',
+                    text: "Central Core",
+                    check: (rects, siteW, siteH) => {
+                         const r = rects.find(i => i.id === 'core');
+                         if(!r) return false;
+                         const cx = r.x + r.w / 2;
+                         const cy = r.y + r.h / 2;
+                         return Math.abs(cx - siteW/2) < siteW * 0.15 && 
+                                Math.abs(cy - siteH/2) < siteH * 0.15;
+                    }
+                }
+            },
+            // Level 9: Resort
+            {
+                id: 9,
+                name: "Island Resort",
+                desc: "Luxury vibes. Connect to the pool.",
+                target: 1400,
+                moves: 30,
+                width: 40,
+                height: 35,
+                rooms: [
+                    { id: 'pool', type: 'POOL', area: 30 },
+                    { id: 'suite1', type: 'SUITE', area: 15 },
+                    { id: 'suite2', type: 'SUITE', area: 15 },
+                    { id: 'bar', type: 'CAFE', area: 10 },
+                    { id: 'lobby', type: 'ENTRY', area: 12 },
+                    { id: 'garden', type: 'GARDEN', area: 20 },
+                    { id: 'gym', type: 'GYM', area: 10 },
+                ],
+                connections: [
+                    { s: 'lobby', t: 'garden', label: 'View' },
+                    { s: 'garden', t: 'pool', label: 'Flow' },
+                    { s: 'suite1', t: 'pool', label: 'Direct' },
+                    { s: 'suite2', t: 'pool', label: 'Direct' },
+                    { s: 'bar', t: 'pool', label: 'Drink' }
+                ],
+                bonus: {
+                    id: 'huge_pool',
+                    text: "Pool > 20% Area",
+                    check: (rects, siteW, siteH) => {
+                        const r = rects.find(i => i.id === 'pool');
+                        if(!r) return false;
+                        return (r.w * r.h) / (siteW * siteH) > 0.2;
+                    }
+                }
+            },
+            // Level 10: Moon Base
+            {
+                id: 10,
+                name: "Moon Base Alpha",
+                desc: "Survival in vacuum. Tightly packed.",
+                target: 1500,
+                moves: 45,
+                width: 45,
+                height: 45,
+                rooms: [
+                    { id: 'lock1', type: 'AIRLOCK', area: 5 },
+                    { id: 'lock2', type: 'AIRLOCK', area: 5 },
+                    { id: 'bio', type: 'BIOSPH', area: 25 },
+                    { id: 'solar', type: 'SOLAR', area: 20 },
+                    { id: 'react', type: 'REACTOR', area: 10 },
+                    { id: 'com', type: 'COMMAND', area: 15 },
+                    { id: 'lab', type: 'LAB', area: 15 },
+                    { id: 'crew', type: 'GUEST', area: 15 },
+                    { id: 'store', type: 'STORAGE', area: 10 },
+                ],
+                connections: [
+                    { s: 'lock1', t: 'store', label: 'Cargo' },
+                    { s: 'lock2', t: 'crew', label: 'Entry' },
+                    { s: 'solar', t: 'react', label: 'Power' },
+                    { s: 'react', t: 'com', label: 'Power' },
+                    { s: 'bio', t: 'crew', label: 'O2' },
+                    { s: 'com', t: 'lab', label: 'Data' }
+                ],
+                bonus: {
+                    id: 'safe_reactor',
+                    text: "Isolated Reactor",
+                    check: (rects, siteW, siteH) => {
+                        // Reactor must be on edge (for cooling/safety?)
+                        const r = rects.find(i => i.id === 'react');
+                        if(!r) return false;
+                        const onEdge = r.x < 0.1 || r.x + r.w > siteW - 0.1 || r.y < 0.1 || r.y + r.h > siteH - 0.1;
+                        return onEdge;
+                    }
+                }
+            }
+        ];
+
+        // --- Logic Helpers ---
+        const getAspectScore = (w, h) => {
+            if (!w || !h) return 0;
+            const ratio = w > h ? h / w : w / h; 
+            if (ratio > 0.8) return 1; 
+            return ratio; 
+        };
+
+        // --- Components ---
+        const Icon = ({ path, size = 20, className = "" }) => (
+            <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className} dangerouslySetInnerHTML={{__html: path}} />
+        );
+
+        const ICONS = {
+            check: '<polyline points="20 6 9 17 4 12"/>',
+            star: '<polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/>',
+            volume: '<polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon><path d="M19.07 4.93a10 10 0 0 1 0 14.14M15.54 8.46a5 5 0 0 1 0 7.07"></path>',
+            volumeX: '<polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon><line x1="23" y1="9" x2="17" y2="15"></line><line x1="17" y1="9" x2="23" y2="15"></line>',
+            award: '<circle cx="12" cy="8" r="7"></circle><polyline points="8.21 13.89 7 23 12 20 17 23 15.79 13.88"></polyline>'
+        };
+
+        const FloatingText = ({ items }) => (
+            <>
+                {items.map(item => (
+                    <div key={item.id} className="floating-text flex flex-col items-center animate-float-up" style={{ left: item.x, top: item.y }}>
+                        <span className={`text-2xl font-black ${item.color || 'text-white'}`}>{item.text}</span>
+                        {item.sub && <span className="text-xs font-bold text-white opacity-90 bg-black/50 px-2 rounded mt-1">{item.sub}</span>}
+                    </div>
+                ))}
+            </>
+        );
+
+        const Modal = ({ title, children, action, actionText, type = 'neutral' }) => (
+            <div className="absolute inset-0 z-50 flex items-center justify-center p-4 modal-backdrop animate-pop">
+                <div className="glass-panel rounded-[32px] p-8 max-w-sm w-full shadow-2xl flex flex-col items-center text-center border-white/20">
+                    <h2 className={`text-4xl font-black mb-4 ${type === 'win' ? 'text-gold' : (type === 'lose' ? 'text-danger' : 'text-white')}`}>{title}</h2>
+                    <div className="mb-8 w-full">{children}</div>
+                    <button onClick={action} className="w-full py-4 px-6 bg-accent hover:bg-blue-400 text-white font-bold rounded-2xl shadow-lg transform transition active:scale-95 flex items-center justify-center gap-2">
+                        {actionText}
+                    </button>
+                </div>
+            </div>
+        );
+
+        // --- Main Game Component ---
+
+        const ArchitectGame = () => {
+            // Audio
+            const { initAudio, isMuted, setIsMuted, playSelect, playSwap, playBonus, playWin, playError, playTick, playEnding } = useAudio();
+            const [audioInited, setAudioInited] = useState(false);
+
+            // Level State
+            const [levelIdx, setLevelIdx] = useState(0);
+            const level = LEVELS[levelIdx];
+            
+            // Game Loop State
+            const [gameState, setGameState] = useState('TITLE'); // Start at Title
+            const [movesLeft, setMovesLeft] = useState(level.moves);
+            
+            // Editor State
+            const [siteW, setSiteW] = useState(level.width);
+            const [siteH, setSiteH] = useState(level.height);
+            const [rooms, setRooms] = useState(level.rooms);
+            const [rects, setRects] = useState([]);
+            
+            // Scoring State
+            const [score, setScore] = useState(0);
+            const [starCount, setStarCount] = useState(0);
+            const [floatItems, setFloatItems] = useState([]);
+            const [activeConnections, setActiveConnections] = useState([]);
+            const [bonusAchieved, setBonusAchieved] = useState(false);
+            
+            // Interaction State
+            const [selectedId, setSelectedId] = useState(null);
+            const containerRef = useRef(null);
+
+            // Initialize Title Screen Background
+            useEffect(() => {
+                if (gameState === 'TITLE') {
+                    // Just render Level 1 in background, no interaction
+                    const l = LEVELS[0];
+                    setSiteW(l.width);
+                    setSiteH(l.height);
+                    setRooms(l.rooms);
+                }
+            }, [gameState]);
+
+            // Reset Level
+            const resetLevel = useCallback(() => {
+                const currentLevel = LEVELS[levelIdx];
+                setSiteW(currentLevel.width);
+                setSiteH(currentLevel.height);
+                
+                // Shuffle rooms for level 3+
+                let initialRooms = [...currentLevel.rooms];
+                if (currentLevel.id >= 3) {
+                    initialRooms.sort(() => Math.random() - 0.5);
+                }
+
+                setRooms(initialRooms); 
+                setMovesLeft(currentLevel.moves);
+                setGameState('PLAYING');
+                setSelectedId(null);
+                setScore(0);
+                setActiveConnections([]);
+                setBonusAchieved(false);
+            }, [levelIdx]);
+
+            const nextLevel = () => {
+                if (levelIdx < LEVELS.length - 1) {
+                    setLevelIdx(prev => prev + 1);
+                    // resetLevel will be triggered by useEffect
+                } else {
+                    // Game Completed
+                    setGameState('ENDING');
+                    playEnding();
+                }
+            };
+            
+            const handleStartGame = () => {
+                handleInitAudio();
+                setLevelIdx(0);
+                resetLevel();
+            };
+
+            // Trigger reset when level changes (only if already playing)
+            useEffect(() => {
+                if (gameState !== 'TITLE' && gameState !== 'ENDING') {
+                    resetLevel();
+                }
+            }, [levelIdx, resetLevel]);
+
+            // --- Treemap Logic (Recursive Slice-and-Dice) ---
+            const computeLayout = useCallback(() => {
+                const newRects = [];
+                const split = (items, x, y, w, h) => {
+                    if (items.length === 0) return;
+                    if (items.length === 1) {
+                        newRects.push({ ...items[0], x, y, w, h });
+                        return;
+                    }
+                    
+                    const totalArea = items.reduce((sum, i) => sum + i.area, 0);
+                    let currentArea = 0;
+                    let splitIdx = 0;
+                    
+                    for (let i = 0; i < items.length - 1; i++) {
+                        currentArea += items[i].area;
+                        if (currentArea >= totalArea / 2) {
+                            splitIdx = i + 1;
+                            break;
+                        }
+                    }
+                    if(splitIdx === 0) splitIdx = 1;
+
+                    const group1 = items.slice(0, splitIdx);
+                    const group2 = items.slice(splitIdx);
+                    
+                    const area1 = group1.reduce((s, i) => s + i.area, 0);
+                    const ratio = area1 / totalArea;
+
+                    if (w > h) {
+                        const w1 = w * ratio;
+                        split(group1, x, y, w1, h);
+                        split(group2, x + w1, y, w - w1, h);
+                    } else {
+                        const h1 = h * ratio;
+                        split(group1, x, y, w, h1);
+                        split(group2, x, y + h1, w, h - h1);
+                    }
+                };
+                split(rooms, 0, 0, siteW, siteH);
+                return newRects;
+            }, [rooms, siteW, siteH]);
+
+            // --- Calculation Loop ---
+            useEffect(() => {
+                const layout = computeLayout();
+                setRects(layout);
+
+                // Scoring Logic
+                const siteAspect = getAspectScore(siteW, siteH);
+                let totalRoomAspect = 0;
+                layout.forEach(r => totalRoomAspect += getAspectScore(r.w, r.h));
+                const roomAspectAvg = totalRoomAspect / layout.length;
+
+                let connectPoints = 0;
+                let activeConns = [];
+                if (level.connections) {
+                    level.connections.forEach(conn => {
+                        const r1 = layout.find(r => r.id === conn.s);
+                        const r2 = layout.find(r => r.id === conn.t);
+                        if (r1 && r2) {
+                            const xTouch = Math.abs((r1.x + r1.w) - r2.x) < 0.1 || Math.abs((r2.x + r2.w) - r1.x) < 0.1;
+                            const yTouch = Math.abs((r1.y + r1.h) - r2.y) < 0.1 || Math.abs((r2.y + r2.h) - r1.y) < 0.1;
+                            const xOverlap = (r1.x < r2.x + r2.w) && (r1.x + r1.w > r2.x);
+                            const yOverlap = (r1.y < r2.y + r2.h) && (r1.y + r1.h > r2.y);
+                            if ((xTouch && yOverlap) || (yTouch && xOverlap)) {
+                                connectPoints += 1;
+                                activeConns.push({ ...conn, r1, r2 });
+                            }
+                        }
+                    });
+                }
+
+                // Check Bonus
+                let isBonus = false;
+                if (level.bonus) {
+                    isBonus = level.bonus.check(layout, siteW, siteH);
+                }
+                
+                if (isBonus && !bonusAchieved && gameState === 'PLAYING') {
+                     playBonus();
+                     triggerFloat(window.innerWidth/2, window.innerHeight/3, "REQUEST MET!", "+300 PTS", "text-gold");
+                }
+                setBonusAchieved(isBonus);
+
+                // Special Synergy
+                let synergyBonus = 0;
+                if (level.id >= 6) {
+                    activeConns.forEach(conn => {
+                        const r1 = rooms.find(r => r.id === conn.s);
+                        const r2 = rooms.find(r => r.id === conn.t);
+                        if (!r1 || !r2) return;
+
+                        if (level.id === 6) {
+                            if (r1.type === 'GALLERY' && r2.type === 'GALLERY') synergyBonus += 60;
+                            if ((r1.type === 'SHOP' && r2.type === 'CAFE') || (r1.type === 'CAFE' && r2.type === 'SHOP')) synergyBonus += 80;
+                        }
+                        if (level.id === 7) {
+                            if ((r1.type === 'REACTOR' && r2.type === 'LAB') || (r2.type === 'REACTOR' && r1.type === 'LAB')) synergyBonus += 100;
+                            if (r1.type === 'COMMAND' || r2.type === 'COMMAND') synergyBonus += 50;
+                        }
+                        if (level.id === 8) { 
+                             if (r1.type === 'CORE' || r2.type === 'CORE') synergyBonus += 50;
+                        }
+                        if (level.id === 9) { 
+                             if (r1.type === 'POOL' || r2.type === 'POOL') synergyBonus += 60;
+                        }
+                        if (level.id === 10) { 
+                             if ((r1.type === 'SOLAR' && r2.type === 'REACTOR') || (r2.type === 'SOLAR' && r1.type === 'REACTOR')) synergyBonus += 100;
+                             if ((r1.type === 'BIOSPH' && r2.type === 'GUEST') || (r2.type === 'BIOSPH' && r1.type === 'GUEST')) synergyBonus += 80;
+                        }
+                    });
+                }
+
+                const connRatio = level.connections ? (connectPoints / level.connections.length) : 1;
+                const perfectConnectionBonus = connRatio === 1 ? 300 : 0;
+                const bonusPoints = isBonus ? 300 : 0;
+
+                const rawScore = (siteAspect * 150) + (roomAspectAvg * 250) + (connRatio * 600) + perfectConnectionBonus + bonusPoints + synergyBonus;
+                const finalScore = Math.floor(rawScore);
+
+                setScore(finalScore);
+                setActiveConnections(activeConns);
+                
+                // Stars
+                let stars = 0;
+                if (finalScore >= level.target) stars = 1;
+                if (finalScore >= level.target * 1.1) stars = 2;
+                if (finalScore >= level.target * 1.2) stars = 3;
+                setStarCount(stars);
+
+                if (gameState === 'PLAYING') {
+                     if (movesLeft <= 0 && finalScore < level.target) {
+                        setGameState('LOSE');
+                        playError();
+                     }
+                }
+
+            }, [rooms, siteW, siteH, level, gameState]);
+
+            const triggerFloat = (x, y, text, sub, color) => {
+                const id = Date.now() + Math.random();
+                setFloatItems(prev => [...prev, { id, x, y, text, sub, color }]);
+                setTimeout(() => setFloatItems(prev => prev.filter(i => i.id !== id)), 1000);
+            };
+
+            const handleInitAudio = () => {
+                if(!audioInited) {
+                    initAudio();
+                    setAudioInited(true);
+                }
+            };
+
+            // --- Handlers ---
+            const handleRoomSwap = (id1, id2) => {
+                handleInitAudio();
+                if (id1 === id2 || movesLeft <= 0) return;
+                
+                playSwap();
+                const newRooms = [...rooms];
+                const i1 = newRooms.findIndex(r => r.id === id1);
+                const i2 = newRooms.findIndex(r => r.id === id2);
+                [newRooms[i1], newRooms[i2]] = [newRooms[i2], newRooms[i1]];
+                
+                setRooms(newRooms);
+                setMovesLeft(prev => prev - 1);
+                
+                const rect = containerRef.current?.getBoundingClientRect();
+                const centerX = rect ? rect.width / 2 : window.innerWidth / 2;
+                const centerY = rect ? rect.height / 2 : window.innerHeight / 2;
+                triggerFloat(centerX, centerY, "-1 MOVE", "", "text-danger");
+            };
+
+            const handleSelect = (id) => {
+                handleInitAudio();
+                if (gameState !== 'PLAYING') return;
+                
+                playSelect();
+                if (selectedId === null) {
+                    setSelectedId(id);
+                } else {
+                    handleRoomSwap(selectedId, id);
+                    setSelectedId(null);
+                }
+            };
+
+            const handleLevelComplete = () => {
+                handleInitAudio();
+                if (score >= level.target) {
+                    playWin();
+                    setGameState('WIN');
+                } else {
+                    playError();
+                    triggerFloat(window.innerWidth/2, window.innerHeight/2, "Not Enough!", "Reach Target Score", "text-gray-400");
+                }
+            };
+
+            // Knob Handlers
+            const shapeVal = Math.round((siteW - siteH) / 2); // 0 = Square
+            const scaleVal = Math.round((siteW + siteH) / 2); // Average size
+
+            const handleShapeChange = (newShape) => {
+                handleInitAudio();
+                let newW = scaleVal + newShape;
+                let newH = scaleVal - newShape;
+                if (newW < 10) newW = 10;
+                if (newW > 50) newW = 50;
+                if (newH < 10) newH = 10;
+                if (newH > 50) newH = 50;
+                setSiteW(newW);
+                setSiteH(newH);
+            };
+
+            const handleScaleChange = (newScale) => {
+                handleInitAudio();
+                const currentShape = shapeVal;
+                let newW = newScale + currentShape;
+                let newH = newScale - currentShape;
+                if (newW < 10) newW = 10; 
+                if (newH < 10) newH = 10;
+                setSiteW(newW);
+                setSiteH(newH);
+            };
+
+            // --- Helpers ---
+            const getCenter = (r) => ({ x: r.x + r.w / 2, y: r.y + r.h / 2 });
+
+            return (
+                <div className="h-screen w-full flex flex-col bg-black text-white relative font-sans overflow-hidden" onClick={handleInitAudio}>
+                    <div className="absolute inset-0 scanlines opacity-30 z-0"></div>
+                    <FloatingText items={floatItems} />
+                    <Confetti active={gameState === 'WIN' || gameState === 'ENDING'} />
+
+                    {/* Top Bar */}
+                    <div className="absolute top-0 right-0 z-50 flex gap-2 p-4 safe-area-pt">
+                         <button onClick={() => setIsMuted(!isMuted)} className="p-3 bg-white/10 backdrop-blur-md rounded-full border border-white/10 hover:bg-white/20 transition shadow-lg">
+                            <Icon path={isMuted ? ICONS.volumeX : ICONS.volume} size={20} />
+                         </button>
+                    </div>
+
+                    {/* --- Title Screen --- */}
+                    {gameState === 'TITLE' && (
+                        <div className="absolute inset-0 z-50 flex flex-col items-center justify-center p-8 bg-black/70 backdrop-blur-sm animate-fade-in">
+                            <div className="text-center space-y-4 mb-12">
+                                <h1 className="text-6xl font-black text-transparent bg-clip-text bg-gradient-to-r from-accent to-purple-500 drop-shadow-[0_0_15px_rgba(10,132,255,0.5)]">
+                                    SQUARE<br/>ARCHITECT
+                                </h1>
+                                <p className="text-gray-400 font-mono tracking-widest text-sm">MASTER THE ART OF SPACE</p>
+                            </div>
+                            <button 
+                                onClick={handleStartGame}
+                                className="px-12 py-5 bg-white text-black font-black text-xl rounded-full shadow-[0_0_30px_rgba(255,255,255,0.3)] hover:scale-105 transition-transform"
+                            >
+                                START NEW GAME
+                            </button>
+                        </div>
+                    )}
+
+                    {/* --- Ending Screen --- */}
+                    {gameState === 'ENDING' && (
+                        <div className="absolute inset-0 z-50 flex flex-col items-center justify-center p-8 bg-black/80 backdrop-blur-md animate-fade-in text-center">
+                            <div className="mb-8">
+                                <Icon path={ICONS.star} size={80} className="text-gold animate-pulse mx-auto mb-4" />
+                                <h1 className="text-5xl font-black text-gold mb-2">CONGRATULATIONS!</h1>
+                                <p className="text-xl text-white font-bold">ALL LEVELS COMPLETED</p>
+                            </div>
+                            <p className="text-gray-300 max-w-md mb-12 leading-relaxed">
+                                You have mastered the balance of form and function. Your architectural legacy will span from tiny studios to orbital stations.
+                            </p>
+                            <div className="bg-white/10 px-6 py-2 rounded-full border border-gold/30 mb-8">
+                                <span className="text-gold font-mono font-bold tracking-widest">RANK: MASTER ARCHITECT</span>
+                            </div>
+                            <button 
+                                onClick={() => setGameState('TITLE')}
+                                className="px-10 py-4 bg-gray-800 text-white font-bold rounded-full hover:bg-gray-700 transition border border-gray-600"
+                            >
+                                BACK TO TITLE
+                            </button>
+                        </div>
+                    )}
+
+                    {/* Modals (Level Win/Lose) */}
+                    {gameState === 'WIN' && (
+                        <Modal title="LEVEL CLEAR!" action={nextLevel} actionText="Next Level" type="win">
+                             <div className="flex justify-center gap-2 mb-4">
+                                {[...Array(3)].map((_, i) => (
+                                    <Icon key={i} path={ICONS.star} size={48} className={i < starCount ? "text-gold fill-gold animate-bounce-sm" : "text-gray-600"} />
+                                ))}
+                            </div>
+                            <p className="text-gray-300 text-lg">Score: <span className="text-white font-mono text-2xl font-bold">{score}</span> / {level.target}</p>
+                            {bonusAchieved && <p className="text-sm text-gold mt-2 font-bold uppercase tracking-widest bg-gold/10 inline-block px-3 py-1 rounded-full">+ CLIENT BONUS</p>}
+                        </Modal>
+                    )}
+
+                    {gameState === 'LOSE' && (
+                        <Modal title="OUT OF MOVES" action={resetLevel} actionText="Try Again" type="lose">
+                            <div className="text-6xl mb-4">🏚️</div>
+                            <p className="text-gray-300">You didn't reach the target.</p>
+                        </Modal>
+                    )}
+
+                    {/* Header - Compact */}
+                    <header className={`z-10 glass-panel m-2 rounded-[24px] shadow-2xl flex flex-col overflow-hidden relative transition-opacity duration-500 ${gameState === 'TITLE' || gameState === 'ENDING' ? 'opacity-0' : 'opacity-100'}`}>
+                        <div className="p-2 sm:p-3 px-3 sm:px-4 flex items-center justify-between relative">
+                            {/* Left: Level Info */}
+                            <div className="flex items-center gap-2 z-10 w-1/3">
+                                <div className="bg-accent/20 p-1.5 px-2 rounded-lg text-[10px] font-black text-accent border border-accent/30 tracking-wider whitespace-nowrap">LVL {level.id}</div>
+                                <div className="hidden sm:block overflow-hidden text-ellipsis whitespace-nowrap">
+                                    <h1 className="font-bold text-xs leading-tight text-white">{level.name}</h1>
+                                    <div className="text-[10px] text-gray-400 truncate">{level.desc}</div>
+                                </div>
+                            </div>
+                            
+                            {/* Center: Score - Absolutely Centered */}
+                            <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 flex flex-col items-center z-0 pointer-events-none">
+                                <div className="text-[8px] text-gray-500 font-bold tracking-widest mb-0.5">SCORE</div>
+                                <div className={`text-3xl font-mono font-black leading-none drop-shadow-md transition-colors duration-300 ${score >= level.target ? 'text-success' : 'text-white'}`}>
+                                    {score}
+                                </div>
+                            </div>
+                            
+                            {/* Right: Moves - Padded for Audio Button */}
+                            <div className="flex justify-end items-center w-1/3 pr-10">
+                                <div className="text-right">
+                                    <div className="text-[8px] text-gray-500 font-bold tracking-widest mb-0.5">MOVES</div>
+                                    <div className={`text-xl font-mono font-black leading-none ${movesLeft <= 2 ? 'text-danger animate-pulse' : 'text-white'}`}>
+                                        {movesLeft}
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div className="h-1 bg-gray-800 w-full relative mt-0.5">
+                            <div 
+                                className={`h-full transition-all duration-700 ease-out rounded-r-full ${score >= level.target ? 'bg-success shadow-[0_0_15px_#30D158]' : 'bg-accent'}`}
+                                style={{ width: `${Math.min((score / level.target) * 100, 100)}%` }}
+                            ></div>
+                            {/* Target Line */}
+                            <div className="absolute top-0 bottom-0 w-0.5 bg-white/50 z-10" style={{ left: '100%' }}></div>
+                        </div>
+                    </header>
+
+                    {/* Sub Header: Bonus Objective - Compact */}
+                    {level.bonus && gameState !== 'TITLE' && gameState !== 'ENDING' && (
+                         <div className={`mx-auto px-4 py-1 rounded-full text-[10px] font-bold tracking-wider flex items-center justify-center gap-2 transition-all duration-500 shadow-lg mb-1
+                            ${bonusAchieved ? 'bg-gold text-black scale-105' : 'bg-gray-800/80 text-gray-400 border border-white/10'}`}>
+                            <Icon path={ICONS.award} size={12} />
+                            {level.bonus.text} 
+                            {bonusAchieved ? " (DONE!)" : " (+300)"}
+                         </div>
+                    )}
+
+                    {/* Main Canvas - Expanded */}
+                    <main 
+                        ref={containerRef}
+                        className="flex-1 relative flex items-center justify-center overflow-hidden p-4"
+                    >
+                         {/* Grid */}
+                         <div className="absolute inset-0 opacity-20" 
+                             style={{backgroundImage: 'radial-gradient(circle, #333 1px, transparent 1px)', backgroundSize: '30px 30px'}}>
+                        </div>
+
+                        {/* The Building Plan */}
+                        <div 
+                            className="relative transition-all duration-500 ease-out shadow-2xl rounded-sm ring-4 ring-white/5"
+                            style={{ 
+                                width: `${siteW * 12}px`, 
+                                height: `${siteH * 12}px`,
+                                maxHeight: '75vh', // Expanded
+                                maxWidth: '95vw',
+                            }}
+                        >
+                            {/* Connections */}
+                            <svg className="absolute inset-0 w-full h-full pointer-events-none z-30" style={{ overflow: 'visible' }}>
+                                <defs>
+                                    <filter id="glow">
+                                        <feGaussianBlur stdDeviation="3" result="coloredBlur"/>
+                                        <feMerge><feMergeNode in="coloredBlur"/><feMergeNode in="SourceGraphic"/></feMerge>
+                                    </filter>
+                                </defs>
+                                {activeConnections.map((conn, i) => {
+                                    const c1 = getCenter(conn.r1);
+                                    const c2 = getCenter(conn.r2);
+                                    const x1 = (c1.x / siteW) * 100 + '%';
+                                    const y1 = (c1.y / siteH) * 100 + '%';
+                                    const x2 = (c2.x / siteW) * 100 + '%';
+                                    const y2 = (c2.y / siteH) * 100 + '%';
+                                    return (
+                                        <g key={i} filter="url(#glow)">
+                                            <line x1={x1} y1={y1} x2={x2} y2={y2} stroke="#FFD60A" strokeWidth="4" opacity="0.6" strokeLinecap="round" />
+                                            <line x1={x1} y1={y1} x2={x2} y2={y2} stroke="white" strokeWidth="2" className="connection-line" />
+                                            <circle cx={x1} cy={y1} r="5" fill="#FFD60A" stroke="white" strokeWidth="2" />
+                                            <circle cx={x2} cy={y2} r="5" fill="#FFD60A" stroke="white" strokeWidth="2" />
+                                        </g>
+                                    );
+                                })}
+                            </svg>
+
+                            {/* Aspect Bonus Glow */}
+                            {getAspectScore(siteW, siteH) > 0.98 && (
+                                <div className="absolute -inset-4 border-2 border-gold/50 rounded-xl pointer-events-none animate-pulse-glow z-0"></div>
+                            )}
+
+                            {rects.map((r) => {
+                                const isSelected = selectedId === r.id;
+                                const ratio = getAspectScore(r.w, r.h);
+                                const isSquare = ratio >= 1; 
+                                const roomDef = ROOM_TYPES[r.type] || ROOM_TYPES.LIVING;
+                                
+                                return (
+                                    <div
+                                        key={r.id}
+                                        onClick={() => handleSelect(r.id)}
+                                        className={`absolute room-transition flex flex-col items-center justify-center cursor-pointer overflow-hidden rounded-xl border border-white/10
+                                            ${isSelected ? 'z-20 ring-4 ring-white shadow-2xl scale-105' : 'z-10 hover:brightness-110'}
+                                            ${roomDef.color}
+                                        `}
+                                        style={{
+                                            left: `${(r.x / siteW) * 100}%`,
+                                            top: `${(r.y / siteH) * 100}%`,
+                                            width: `${(r.w / siteW) * 100}%`,
+                                            height: `${(r.h / siteH) * 100}%`,
+                                        }}
+                                    >
+                                        <div className="text-2xl mb-1 filter drop-shadow-lg select-none transform transition-transform group-hover:scale-110">{roomDef.icon}</div>
+                                        {(r.w/siteW > 0.12 && r.h/siteH > 0.12) && (
+                                            <span className="font-mono font-bold text-white text-[10px] drop-shadow-md px-2 py-0.5 bg-black/20 rounded-full select-none backdrop-blur-sm">
+                                                {level.width > 20 ? r.type.substring(0, 4) : r.type}
+                                            </span>
+                                        )}
+                                        <div className="absolute top-1 right-1 flex flex-col gap-1">
+                                            {isSquare && !isSelected && <span className="text-yellow-200 text-xs drop-shadow-md">★</span>}
+                                        </div>
+                                    </div>
+                                );
+                            })}
+                        </div>
+                    </main>
+
+                    {/* Footer - Control Panel - Compact */}
+                    <footer className={`z-10 glass-panel rounded-t-[32px] border-t border-white/10 p-4 safe-area-pb shadow-[0_-10px_40px_rgba(0,0,0,0.5)] transition-opacity duration-500 ${gameState === 'TITLE' || gameState === 'ENDING' ? 'opacity-0 pointer-events-none' : 'opacity-100'}`}>
+                        <div className="max-w-xl mx-auto flex items-center justify-between gap-4">
+                            
+                            {/* Unified Controls */}
+                            <div className="flex gap-4 items-center">
+                                {/* SHAPE KNOB (Main) */}
+                                <Knob 
+                                    label="SHAPE" 
+                                    value={shapeVal} 
+                                    min={-15} 
+                                    max={15} 
+                                    onChange={handleShapeChange}
+                                    onTick={playTick}
+                                    large={true}
+                                />
+                                
+                                {/* SCALE KNOB (Secondary) */}
+                                <Knob 
+                                    label="SCALE" 
+                                    value={scaleVal} 
+                                    min={15} 
+                                    max={40} 
+                                    onChange={handleScaleChange}
+                                    onTick={playTick}
+                                    large={false}
+                                />
+                            </div>
+
+                            {/* Action Button */}
+                            <button 
+                                onClick={handleLevelComplete}
+                                disabled={score < level.target}
+                                className={`flex-1 h-14 rounded-[20px] font-bold font-mono text-lg transition-all transform active:scale-95 flex items-center justify-center gap-2 border-b-4 shadow-xl
+                                    ${score >= level.target 
+                                        ? 'bg-success text-white border-green-700 shadow-[0_10px_30px_rgba(48,209,88,0.3)] hover:brightness-110' 
+                                        : 'bg-gray-800 text-gray-500 border-gray-900 cursor-not-allowed opacity-50'
+                                    }
+                                `}
+                            >
+                                <span className="tracking-widest">FINISH</span>
+                                {score >= level.target && <Icon path={ICONS.check} size={24} />}
+                            </button>
+                        </div>
+                        <div className="text-center mt-2 text-[9px] text-gray-500 font-mono tracking-[0.2em] opacity-60">
+                             ADJUST SHAPE & SCALE • OPTIMIZE LAYOUT
+                        </div>
+                    </footer>
+                </div>
+            );
+        };
+
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<ArchitectGame />);
+    </script>
+</body>
+</html>
